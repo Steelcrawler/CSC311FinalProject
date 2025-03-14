@@ -1,0 +1,228 @@
+
+=== Unparseable Responses ===
+
+Q1:
+  Pizza: 0
+  Shawarma: 0
+  Sushi: 0
+  total: 0
+
+Q2:
+  Pizza: 0
+  Shawarma: 0
+  Sushi: 0
+  total: 0
+
+Q3:
+  Pizza: 0
+  Shawarma: 0
+  Sushi: 0
+  total: 0
+
+Q4:
+  Pizza: 2
+  Shawarma: 3
+  Sushi: 2
+  total: 7
+
+Q5:
+  Pizza: 16
+  Shawarma: 33
+  Sushi: 20
+  total: 69
+
+Q6:
+  Pizza: 0
+  Shawarma: 2
+  Sushi: 5
+  total: 7
+
+Q7:
+  Pizza: 1
+  Shawarma: 0
+  Sushi: 1
+  total: 2
+
+Q8:
+  Pizza: 0
+  Shawarma: 0
+  Sushi: 0
+  total: 0
+
+=== Q1_complexity ===
+
+Pizza:
+  1: 15
+  2: 153
+  3: 277
+  4: 91
+  5: 12
+
+Shawarma:
+  1: 14
+  2: 113
+  3: 195
+  4: 187
+  5: 39
+
+Sushi:
+  1: 34
+  2: 109
+  3: 120
+  4: 162
+  5: 123
+
+=== Q2_ingredients ===
+
+Pizza:
+  1: 14
+  2: 1
+  3: 86
+  4: 83
+  5: 120
+
+Shawarma:
+  1: 16
+  2: 10
+  3: 29
+  4: 48
+  5: 103
+
+Sushi:
+  1: 18
+  2: 63
+  3: 114
+  4: 112
+  5: 136
+
+=== Q3_setting ===
+
+Pizza:
+  week: 768
+  day: 768
+  lunch: 787
+  party: 521
+  late: 339
+
+Shawarma:
+  week: 824
+  day: 824
+  lunch: 896
+  dinner: 553
+  party: 89
+
+Sushi:
+  week: 695
+  day: 695
+  dinner: 839
+  weekend: 802
+  lunch: 658
+
+=== Q4_price ===
+
+Pizza:
+  mean: 8.54
+  median: 5.00
+  min: 1.00
+  max: 35.00
+
+Shawarma:
+  mean: 10.52
+  median: 10.00
+  min: 1.00
+  max: 25.00
+
+Sushi:
+  mean: 14.05
+  median: 12.00
+  min: 0.50
+  max: 100.00
+
+=== Q5_movie ===
+
+Pizza:
+  cloudy: 26
+  chance: 27
+  meatballs: 27
+  all: 2
+  sort: 1
+
+Shawarma:
+  avengers: 235
+  none: 11
+  ok: 1
+  tbf: 1
+  think: 28
+
+Sushi:
+  spirited: 25
+  away: 26
+  japanese: 15
+  movies: 13
+  cartoon: 1
+
+=== Q6_drink ===
+
+Pizza:
+  coke: 196
+  cola: 82
+  soda: 92
+  coca: 66
+  regular: 1
+
+Shawarma:
+  hot: 1
+  water: 147
+  lemon: 6
+  tea: 35
+  juice: 50
+
+Sushi:
+  miso: 16
+  soup: 24
+  cola: 11
+  water: 208
+  coke: 18
+
+=== Q7_person ===
+
+Pizza:
+  friends: 485
+  teachers: 158
+  strangers: 89
+  siblings: 212
+  parents: 170
+
+Shawarma:
+  teachers: 25
+  friends: 382
+  strangers: 218
+  siblings: 142
+  parents: 138
+
+Sushi:
+  friends: 387
+  parents: 280
+  siblings: 211
+  strangers: 127
+  teachers: 29
+
+=== Q8_hot_sauce ===
+
+Pizza:
+  none: 278
+  little: 155
+  some: 91
+  lot: 24
+
+Shawarma:
+  some: 229
+  little: 139
+  lot: 100
+  none: 80
+
+Sushi:
+  none: 388
+  little: 87
+  some: 54
+  lot: 19
