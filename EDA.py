@@ -80,7 +80,7 @@ def extract_common_words(text):
     
     stop_words = {
         'the', 'a', 'an', 'in', 'of', 'to', 'and', 'is', 'it', 'this', 'that', 'would', 'with', 
-        'for', 'on', 'at', 'be', 'i', 'food', 'item', 'my', 'me', 'you', 'your', 'they', 'their'
+        'for', 'on', 'at', 'be', 'i', 'food', 'item', 'my', 'me', 'you', 'your', 'they', 'their', 'or'
     }
     
     filtered_words = [word for word in words if word not in stop_words and len(word) > 1]
@@ -94,7 +94,7 @@ def parse_hot_sauce_amount(text, count_nan_as_none=True):
     # Define stop words to ignore when matching
     stop_words = {
         'the', 'a', 'an', 'in', 'of', 'to', 'and', 'is', 'it', 'this', 'that', 'would', 'with', 
-        'for', 'on', 'at', 'be', 'i', 'food', 'item', 'my', 'me', 'you', 'your', 'they', 'their'
+        'for', 'on', 'at', 'be', 'i', 'food', 'item', 'my', 'me', 'you', 'your', 'they', 'their', 'or'
     }
 
     text = text.lower()
