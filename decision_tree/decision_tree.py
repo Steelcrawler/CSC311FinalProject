@@ -772,6 +772,214 @@ class FoodSurveyDataLoader:
         print(f"Decision tree exported to {output_file}")
         return output_file
 
+    def perform_grid_search(self, output_file='max_depth_grid_search.txt', min_depth=0, max_depth=15, n_folds=5, random_state=42):
+        """
+        Perform a grid search for the optimal max_depth parameter of the decision tree.
+        
+        Parameters:
+        -----------
+        output_file : str
+            Path to the output text file where results will be saved
+        min_depth : int
+            Minimum depth to try
+        max_depth : int
+            Maximum depth to try
+        n_folds : int
+            Number of folds for cross-validation
+        random_state : int
+            Random seed for reproducibility
+        
+        Returns:
+        --------
+        tuple
+            (best_max_depth, best_accuracy)
+        """
+        from sklearn.model_selection import StratifiedKFold, cross_val_score
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import time
+        
+        if self.feature_names is None or len(self.feature_names) == 0:
+            self.preprocess_data()
+        
+        X = self.df[self.feature_names]
+        y = self.df['label_encoded']
+        
+        # Initialize variables to track best performance
+        best_max_depth = None
+        best_accuracy = 0
+        
+        # Store results for plotting
+        depths = []
+        mean_scores = []
+        std_scores = []
+        
+        # Open file for saving results
+        with open(output_file, 'w') as f:
+            # Write header
+            f.write("Grid Search Results for Decision Tree Max Depth\n")
+            f.write("=" * 50 + "\n\n")
+            f.write(f"Dataset: {self.csv_path}\n")
+            f.write(f"Number of samples: {X.shape[0]}\n")
+            f.write(f"Number of features: {X.shape[1]}\n")
+            f.write(f"Number of classes: {len(np.unique(y))}\n")
+            f.write(f"Cross-validation folds: {n_folds}\n\n")
+            f.write(f"{'Max Depth':<10} {'Mean Accuracy':<15} {'Std Dev':<10} {'Time (s)':<10}\n")
+            f.write("-" * 50 + "\n")
+            
+            # Try each max_depth value
+            for depth in range(min_depth, max_depth + 1):
+                start_time = time.time()
+                
+                # Initialize model with current depth
+                model = DecisionTreeClassifier(
+                    max_depth=depth if depth > 0 else None,  # None means unlimited depth
+                    random_state=random_state
+                )
+                
+                # Initialize cross-validation
+                cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_state)
+                
+                # Perform cross-validation
+                scores = cross_val_score(model, X, y, cv=cv, scoring='accuracy')
+                
+                elapsed_time = time.time() - start_time
+                
+                # Calculate mean and std of scores
+                mean_accuracy = scores.mean()
+                std_accuracy = scores.std()
+                
+                # Save results
+                depths.append(depth)
+                mean_scores.append(mean_accuracy)
+                std_scores.append(std_accuracy)
+                
+                # Write to file
+                f.write(f"{depth if depth > 0 else 'None':<10} {mean_accuracy:.6f}      {std_accuracy:.6f}   {elapsed_time:.2f}\n")
+                
+                # Check if this is the best model so far
+                if mean_accuracy > best_accuracy:
+                    best_accuracy = mean_accuracy
+                    best_max_depth = depth
+            
+            # Write summary
+            f.write("\n" + "-" * 50 + "\n")
+            f.write(f"Best max_depth: {best_max_depth if best_max_depth > 0 else 'None'}\n")
+            f.write(f"Best mean accuracy: {best_accuracy:.6f}\n")
+        
+        # Plot results
+        plt.figure(figsize=(10, 6))
+        plt.errorbar(depths, mean_scores, yerr=std_scores, fmt='-o', capsize=5)
+        plt.xlabel('Max Depth')
+        plt.ylabel('Cross-Validation Accuracy')
+        plt.title('Decision Tree Performance vs Max Depth')
+        plt.grid(True)
+        plt.tight_layout()
+        
+        # Add a vertical line at the best max_depth
+        plt.axvline(x=best_max_depth, color='r', linestyle='--', label=f'Best depth: {best_max_depth}')
+        plt.legend()
+        
+        # Save the plot
+        plot_file = output_file.replace('.txt', '_plot.png')
+        plt.savefig(plot_file)
+        plt.close()
+        
+        print(f"Grid search results saved to {output_file}")
+        print(f"Grid search plot saved to {plot_file}")
+        
+        return best_max_depth, best_accuracy
+    
+    def evaluate_best_model(self, best_max_depth, output_file='best_model_results.txt'):
+        """
+        Train a model with the best max_depth and evaluate it on the test set.
+        
+        Parameters:
+        -----------
+        best_max_depth : int
+            The optimal max_depth found from grid search
+        output_file : str
+            Path to save detailed evaluation results
+            
+        Returns:
+        --------
+        float
+            Test accuracy of the best model
+        """
+        # Make sure we have training and test sets
+        if self.X_train is None or self.X_test is None:
+            self.split_data(test_size=0.2)
+        
+        # Train the model with the best max_depth
+        self.train_decision_tree(max_depth=best_max_depth)
+        
+        # Get predictions
+        train_preds = self.model.predict(self.X_train)
+        test_preds = self.model.predict(self.X_test)
+        
+        # Calculate accuracies
+        train_acc = accuracy_score(self.y_train, train_preds)
+        test_acc = accuracy_score(self.y_test, test_preds)
+        
+        # Get detailed classification report
+        target_names = self.label_encoder.classes_
+        test_report = classification_report(self.y_test, test_preds, target_names=target_names)
+        
+        # Get confusion matrix
+        cm = confusion_matrix(self.y_test, test_preds)
+        
+        # Save results to file
+        with open(output_file, 'w') as f:
+            f.write(f"Evaluation Results for Best Model (max_depth={best_max_depth})\n")
+            f.write("=" * 60 + "\n\n")
+            f.write(f"Training accuracy: {train_acc:.6f}\n")
+            f.write(f"Testing accuracy: {test_acc:.6f}\n\n")
+            f.write("Classification Report:\n")
+            f.write(test_report + "\n\n")
+            f.write("Confusion Matrix:\n")
+            f.write(str(cm) + "\n\n")
+            
+            # Also write the most important features
+            importances = self.model.feature_importances_
+            indices = np.argsort(importances)[::-1]
+            f.write("Top 10 Important Features:\n")
+            for i in range(min(10, len(self.feature_names))):
+                idx = indices[i]
+                f.write(f"{i+1}. {self.feature_names[idx]}: {importances[idx]:.6f}\n")
+        
+        print(f"Best model evaluation results saved to {output_file}")
+        print(f"Best model with max_depth={best_max_depth}:")
+        print(f"  - Training accuracy: {train_acc:.4f}")
+        print(f"  - Testing accuracy: {test_acc:.4f}")
+        
+        # Visualize confusion matrix
+        plt.figure(figsize=(10, 8))
+        plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+        plt.title(f'Confusion Matrix (Best Model, max_depth={best_max_depth})')
+        plt.colorbar()
+        
+        tick_marks = np.arange(len(target_names))
+        plt.xticks(tick_marks, target_names, rotation=90)
+        plt.yticks(tick_marks, target_names)
+        
+        # Add text annotations
+        thresh = cm.max() / 2
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                plt.text(j, i, cm[i, j],
+                        horizontalalignment="center",
+                        color="white" if cm[i, j] > thresh else "black")
+        
+        plt.ylabel('True Label')
+        plt.xlabel('Predicted Label')
+        plt.tight_layout()
+        
+        # Save the confusion matrix plot
+        plot_file = output_file.replace('.txt', '_cm.png')
+        plt.savefig(plot_file)
+        plt.close()
+        
+        return test_acc
 
 def main():
     # Example usage
@@ -784,25 +992,42 @@ def main():
     loader.load_data()
     loader.preprocess_data()
     
-    # Perform cross-validation (k-fold)
-    print("\n=== Cross-Validation Evaluation ===")
-    scores, model = loader.perform_cross_validation(n_folds=5, max_depth=5)
+    # Perform grid search for optimal max_depth
+    print("\n=== Grid Search for Optimal Max Depth ===")
+    best_max_depth, best_cv_accuracy = loader.perform_grid_search(
+        output_file='max_depth_grid_search_results.txt',
+        min_depth=0,
+        max_depth=15,
+        n_folds=5
+    )
+    print(f"Best max_depth: {best_max_depth}, Best cross-validation accuracy: {best_cv_accuracy:.4f}")
     
+    # Perform cross-validation with the best max_depth
+    print(f"\n=== Cross-Validation Evaluation (max_depth={best_max_depth}) ===")
+    scores, model = loader.perform_cross_validation(n_folds=5, max_depth=best_max_depth)
+    
+    # Split data for final model
+    print("\n=== Train/Test Split Evaluation ===")
+    loader.split_data(test_size=0.2)
+    
+    # Evaluate the best model on the test set
+    print(f"\n=== Evaluating Best Model (max_depth={best_max_depth}) on Test Set ===")
+    test_accuracy = loader.evaluate_best_model(
+        best_max_depth,
+        output_file=f'best_model_results_depth_{best_max_depth}.txt'
+    )
+    
+    # Export the tree to a standalone Python file
+    loader.export_tree_to_python(f'food_prediction_depth_{best_max_depth}.py')
+    
+    # Save the model
+    loader.save_model(f'food_survey_decision_tree_depth_{best_max_depth}.joblib')
+    
+    # Feature importance analysis
     print("\n=== Feature Importance Analysis ===")
     loader.feature_importance(top_n=10)
     
-
-    print("\n=== Train/Test Split Evaluation ===")
-    loader.split_data(test_size=0.2)
-    loader.train_decision_tree(max_depth=10)
-    loader.export_tree_to_python('food_prediction.py')
-    loader.evaluate_model()
-    
-    loader.save_model()
-    
     print("\n=== Example Prediction ===")
-    # loader.load_model()
-    
     example_features = {
         'Q1_complexity': 3,
         'Q2_ingredients': 8,
@@ -813,6 +1038,12 @@ def main():
     
     prediction = loader.predict(example_features)
     print(f"Predicted food item: {prediction}")
+    
+    # Final summary
+    print("\n=== Final Results Summary ===")
+    print(f"Best max_depth parameter: {best_max_depth}")
+    print(f"Cross-validation accuracy: {best_cv_accuracy:.4f}")
+    print(f"Final test set accuracy: {test_accuracy:.4f}")
 
 
 if __name__ == "__main__":
