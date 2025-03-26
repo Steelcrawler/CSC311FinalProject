@@ -2,6 +2,7 @@
 # Generated automatically - do not modify
 
 import re
+import csv
 
 def extract_scale(text):
     """Extract scale rating from Q1"""
@@ -119,7 +120,7 @@ def parse_hot_sauce_amount(text):
             
     return 'other'
 
-def predict_food(survey_dict):
+def predict(survey_dict):
     """
     Predict food type based on survey responses
     
@@ -288,20 +289,37 @@ def predict_food(survey_dict):
                     else:  # Q8_hot_sauce_medium > 0.5
                         return 'Shawarma'
 
-# Example usage
-if __name__ == '__main__':
-    example = {
-        'id': '716549',
-        'Q1: From a scale 1 to 5, how complex is it to make this food? (Where 1 is the most simple, and 5 is the most complex)': '3',
-        'Q2: How many ingredients would you expect this food item to contain?': '6',
-        'Q3: In what setting would you expect this food to be served? Please check all that apply': 'Week day lunch,At a party,Late night snack',
-        'Q4: How much would you expect to pay for one serving of this food item?': '5',
-        'Q5: What movie do you think of when thinking of this food item?': 'Cloudy with a Chance of Meatballs',
-        'Q6: What drink would you pair with this food item?': 'Coke\xa0',
-        'Q7: When you think about this food item, who does it remind you of?': 'Friends',
-        'Q8: How much hot sauce would you add to this food item?': 'A little (mild)',
-        'Label': 'Pizza'
-    }
-    prediction = predict_food(example)
-    print(f'Predicted food: {prediction}')
-    # You can test with other examples or without the 'Label' key to see predictions
+def predict_all(filename):
+    """
+    Make predictions for the data in filename
+    """
+    # read the file containing the test data
+    # you do not need to use the "csv" package like we are using
+    # (e.g. you may use numpy, pandas, etc)
+    data = csv.DictReader(open(filename))
+
+    predictions = []
+    for test_example in data:
+        # obtain a prediction for this test example
+        pred = predict(test_example)
+        predictions.append(pred)
+
+    return predictions
+
+# # Example usage
+# if __name__ == '__main__':
+#     example = {
+#         'id': '716549',
+#         'Q1: From a scale 1 to 5, how complex is it to make this food? (Where 1 is the most simple, and 5 is the most complex)': '3',
+#         'Q2: How many ingredients would you expect this food item to contain?': '6',
+#         'Q3: In what setting would you expect this food to be served? Please check all that apply': 'Week day lunch,At a party,Late night snack',
+#         'Q4: How much would you expect to pay for one serving of this food item?': '5',
+#         'Q5: What movie do you think of when thinking of this food item?': 'Cloudy with a Chance of Meatballs',
+#         'Q6: What drink would you pair with this food item?': 'Coke\xa0',
+#         'Q7: When you think about this food item, who does it remind you of?': 'Friends',
+#         'Q8: How much hot sauce would you add to this food item?': 'A little (mild)',
+#         'Label': 'Pizza'
+#     }
+#     prediction = predict_food(example)
+#     print(f'Predicted food: {prediction}')
+#     # You can test with other examples or without the 'Label' key to see predictions
