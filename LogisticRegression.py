@@ -19,7 +19,6 @@ def extract_number(value):
     if pd.isna(value) or not isinstance(value, str):
         return value
 
-    # Try to find numbers in the string
     matches = re.findall(r'(\d+(\.\d+)?)', value)
     if matches and len(matches) > 0:
         return float(matches[0][0])
@@ -52,15 +51,12 @@ def preprocess_data_for_logistic_regression(file_path):
         'Label': 'food_type'
     }
 
-    # Rename columns if they exist
     for old_col, new_col in columns_mapping.items():
         if old_col in df.columns:
             df.rename(columns={old_col: new_col}, inplace=True)
 
-    # Create separate dataframe for feature engineering
     processed_df = pd.DataFrame(index=df.index)
 
-    # Extract numerical features
     if 'complexity' in df.columns:
         processed_df['complexity'] = df['complexity'].copy()
 
@@ -70,7 +66,6 @@ def preprocess_data_for_logistic_regression(file_path):
     if 'price' in df.columns:
         processed_df['price_num'] = df['price'].apply(extract_number)
 
-    # Process hot sauce as ordinal feature
     if 'hot_sauce' in df.columns:
         hot_sauce_map = {
             'None': 0,
@@ -128,9 +123,8 @@ def preprocess_data_for_logistic_regression(file_path):
         else:
             print("No non-empty movie data to create bag-of-words features")
 
-    # Process drink preferences - create drink type categorization
     if 'drink' in df.columns:
-        processed_df['drink_category'] = 'other'  # Default
+        processed_df['drink_category'] = 'other'
 
         for idx, drink in enumerate(df['drink']):
             if not isinstance(drink, str):
@@ -149,23 +143,18 @@ def preprocess_data_for_logistic_regression(file_path):
             elif any(term in drink_lower for term in ['juice', 'lemonade']):
                 processed_df.at[idx, 'drink_category'] = 'juice'
 
-    # Add the target variable
     if 'food_type' in df.columns:
         processed_df['food_type'] = df['food_type']
 
-    # Define numerical and categorical columns
     numerical_cols = [col for col in ['complexity', 'ingredients_num', 'price_num', 'hot_sauce_level']
                      if col in processed_df.columns]
 
-    # Get all movie word features
     movie_word_cols = [col for col in processed_df.columns if col.startswith('movie_word_')]
     
-    # Now we keep the movie word columns separate from other categorical columns
     categorical_cols = [col for col in processed_df.columns
                        if col.startswith('setting_') or
                        col == 'drink_category']
 
-    # Check for and remove constant columns
     for cols_list in [numerical_cols, categorical_cols, movie_word_cols]:
         for col in list(cols_list):  # Use list() to avoid modifying during iteration
             if col in processed_df.columns and processed_df[col].nunique() <= 1:
@@ -201,27 +190,23 @@ def preprocess_data_for_logistic_regression(file_path):
 
 def train_logistic_regression(df, preprocessor, numerical_cols, categorical_cols, movie_word_cols, target_col='food_type', test_size=0.25, random_state=42):
     """Train a logistic regression model with the preprocessed data."""
-    # Split features and target
     X = df.drop(columns=[target_col])
     y = df[target_col]
 
-    # Split into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
 
-    # Create pipeline with preprocessing and logistic regression
     pipeline = Pipeline([
         ('preprocessor', preprocessor),
         ('classifier', LogisticRegression(max_iter=1000, random_state=random_state))
     ])
 
-    # Define hyperparameters to tune
     param_grid = {
         'classifier__C': [0.01, 0.1, 1.0, 10.0, 100.0],
         'classifier__penalty': ['l1', 'l2', 'elasticnet'],
-        'classifier__solver': ['saga'],  # saga supports all penalties
-        'classifier__l1_ratio': [0.2, 0.5, 0.8]  # only used with elasticnet
+        'classifier__solver': ['saga'], 
+        'classifier__l1_ratio': [0.2, 0.5, 0.8]  
     }
 
     # Use GridSearchCV to find the best hyperparameters
@@ -232,10 +217,8 @@ def train_logistic_regression(df, preprocessor, numerical_cols, categorical_cols
     print("Training logistic regression model...")
     grid_search.fit(X_train, y_train)
 
-    # Get the best model
     best_model = grid_search.best_estimator_
 
-    # Evaluate on test set
     y_pred = best_model.predict(X_test)
 
     # Print results
@@ -320,17 +303,13 @@ def analyze_logistic_regression_coefficients(model, X, numerical_cols, categoric
             print(f"  {feature}: {coef:.4f}")
 
 def main():
-    # File path to your CSV
     file_path = 'cleaned_data_combined_modified.csv'
 
-    # Preprocess data for logistic regression
     print("Preprocessing data for logistic regression...")
     df, preprocessor, numerical_cols, categorical_cols, movie_word_cols = preprocess_data_for_logistic_regression(file_path)
 
-    # Train logistic regression model
     model = train_logistic_regression(df, preprocessor, numerical_cols, categorical_cols, movie_word_cols)
 
-    # Save model and preprocessor
     output_dir = "logistic_regression_model"
     os.makedirs(output_dir, exist_ok=True)
 
