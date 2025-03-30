@@ -1,0 +1,22 @@
+Feature Importance:
+------------------------------
+1. Q3_setting_at_a_party: 0.2967
+2. Q2_ingredients: 0.1285
+3. Q5_movie_avengers: 0.1124
+4. Q6_drink_tea: 0.0711
+5. Q4_price: 0.0686
+6. Q6_drink_water: 0.0628
+7. Q3_setting_weekend_dinner: 0.0470
+8. Q6_drink_sake: 0.0296
+9. Q6_drink_soup: 0.0237
+10. Q3_setting_week_day_lunch: 0.0204
+11. id: 0.0172
+12. Q6_drink_green: 0.0163
+13. q8_hot_sauce_a_lot_hot: 0.0146
+14. Q6_drink_iced: 0.0099
+15. Q6_drink_soda: 0.0093
+16. Q5_movie_mutant: 0.0091
+17. q8_hot_sauce_a_moderate_amount_medium: 0.0079
+18. Q5_movie_shawarma: 0.0064
+19. Q5_movie_monsters: 0.0056
+20. Q5_movie_sushi: 0.0055

@@ -1,0 +1,10 @@
+Training Summary
+==============================
+
+Data file: ../cleaned_data_combined_modified.csv
+Training samples: 1310
+Testing samples: 327
+Number of features: 93
+Best parameters: max_depth=7, min_samples_split=2
+Cross-validation accuracy: 0.8191
+Test accuracy: 0.8410
