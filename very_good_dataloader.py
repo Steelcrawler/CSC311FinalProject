@@ -2,8 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 from collections import Counter
-from sklearn.preprocessing import LabelEncoder
-from sklearn.feature_extraction.text import CountVectorizer
+import random
 
 class FoodSurveyDataLoader:
     def __init__(self, csv_path):
@@ -18,7 +17,11 @@ class FoodSurveyDataLoader:
         self.csv_path = csv_path
         self.df = None
         self.feature_names = []
-        self.label_encoder = LabelEncoder()
+        
+        # For label encoding
+        self.classes_ = None
+        self.class_to_index = {}
+        self.index_to_class = {}
         
         # Store column original names for easier reference
         self.q1_col = 'Q1: From a scale 1 to 5, how complex is it to make this food? (Where 1 is the most simple, and 5 is the most complex)'
@@ -43,10 +46,10 @@ class FoodSurveyDataLoader:
             'am', 'is', 'are', 'was', 'were', 'been', 'being'
         }
         
-        # Initialize vectorizers for text columns
-        self.q5_vectorizer = None  # Will be initialized in preprocess_data
-        self.q6_vectorizer = None
-        self.q7_vectorizer = None
+        # Vocabulary for text columns
+        self.q5_vocabulary = {}
+        self.q6_vocabulary = {}
+        self.q7_vocabulary = {}
         
     def load_data(self):
         """Load the CSV data"""
@@ -154,6 +157,171 @@ class FoodSurveyDataLoader:
         
         return text.strip()
     
+    def encode_labels(self, labels):
+        """
+        Custom implementation of label encoding without sklearn
+        """
+        unique_labels = sorted(set(labels))
+        self.classes_ = unique_labels
+        self.class_to_index = {label: i for i, label in enumerate(unique_labels)}
+        self.index_to_class = {i: label for i, label in enumerate(unique_labels)}
+        return labels.map(self.class_to_index)
+    
+    def bag_of_words(self, texts, min_doc_fraction=0.01, max_doc_fraction=0.9):
+        """
+        Custom implementation of bag-of-words without sklearn
+        
+        Parameters:
+        -----------
+        texts : pd.Series
+            Series of text documents
+        min_doc_fraction : float
+            Minimum document frequency (as a fraction of total documents)
+        max_doc_fraction : float
+            Maximum document frequency (as a fraction of total documents)
+            
+        Returns:
+        --------
+        tuple
+            (bag_of_words_df, vocabulary)
+        """
+        # Count words in all documents
+        word_counts = Counter()
+        doc_counts = Counter()
+        doc_words = []
+        
+        # Process each document
+        for doc in texts:
+            if pd.isna(doc) or not isinstance(doc, str) or not doc.strip():
+                doc_words.append([])
+                continue
+                
+            # Tokenize
+            words = re.findall(r'\b\w+\b', doc.lower())
+            
+            # Filter stop words
+            words = [w for w in words if w not in self.stop_words and len(w) > 1]
+            doc_words.append(words)
+            
+            # Count words in this document
+            doc_word_set = set(words)
+            for word in words:
+                word_counts[word] += 1
+            for word in doc_word_set:
+                doc_counts[word] += 1
+        
+        # Filter by document frequency
+        n_docs = len(texts)
+        min_doc_count = max(1, int(min_doc_fraction * n_docs))
+        max_doc_count = min(n_docs, int(max_doc_fraction * n_docs))
+        
+        # Create vocabulary
+        vocabulary = {}
+        feature_names = []
+        for word, count in doc_counts.items():
+            if min_doc_count <= count <= max_doc_count:
+                vocabulary[word] = len(vocabulary)
+                feature_names.append(word)
+        
+        # Create BoW matrix
+        bow_matrix = []
+        for words in doc_words:
+            word_counts = Counter(words)
+            row = [0] * len(vocabulary)
+            for word, count in word_counts.items():
+                if word in vocabulary:
+                    row[vocabulary[word]] = count
+            bow_matrix.append(row)
+        
+        # Convert to DataFrame
+        bow_df = pd.DataFrame(bow_matrix, columns=feature_names)
+        
+        return bow_df, vocabulary
+    
+    def custom_one_hot_encoding(self, column, prefix):
+        """
+        Create one-hot encoding for a column without using pandas get_dummies
+        
+        Parameters:
+        -----------
+        column : pd.Series
+            Column to one-hot encode
+        prefix : str
+            Prefix for the new column names
+            
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with one-hot encoded columns
+        """
+        # Get unique values
+        unique_values = column.dropna().unique()
+        
+        # Create one-hot encoded columns
+        one_hot_df = pd.DataFrame(index=column.index)
+        for value in unique_values:
+            col_name = f"{prefix}_{value}".replace(" ", "_").replace("(", "").replace(")", "").lower()
+            one_hot_df[col_name] = (column == value).astype(int)
+            
+        return one_hot_df
+    
+    def stratified_train_test_split(self, X, y, test_size=0.2, random_state=None):
+        """
+        Custom implementation of stratified train-test split
+        
+        Parameters:
+        -----------
+        X : pd.DataFrame
+            Feature matrix
+        y : pd.Series
+            Target vector
+        test_size : float
+            Proportion of the dataset to include in the test split
+        random_state : int
+            Random seed for reproducibility
+            
+        Returns:
+        --------
+        tuple
+            (X_train, X_test, y_train, y_test)
+        """
+        if random_state is not None:
+            random.seed(random_state)
+        
+        # Convert to numpy for ease of indexing
+        X_np = X.values
+        y_np = y.values
+        
+        # Group indices by class
+        class_indices = {}
+        for i, label in enumerate(y_np):
+            if label not in class_indices:
+                class_indices[label] = []
+            class_indices[label].append(i)
+        
+        train_indices = []
+        test_indices = []
+        
+        # For each class, split indices
+        for label, indices in class_indices.items():
+            n_test = int(len(indices) * test_size)
+            
+            # Shuffle indices
+            shuffled = indices.copy()
+            random.shuffle(shuffled)
+            
+            # Split
+            test_indices.extend(shuffled[:n_test])
+            train_indices.extend(shuffled[n_test:])
+        
+        # Create DataFrame slices
+        X_train = X.iloc[train_indices]
+        X_test = X.iloc[test_indices]
+        y_train = y.iloc[train_indices]
+        y_test = y.iloc[test_indices]
+        
+        return X_train, X_test, y_train, y_test
+    
     def preprocess_data(self):
         """Preprocess the data and extract features with one-hot encoding for all categorical variables"""
         if self.df is None:
@@ -205,21 +373,15 @@ class FoodSurveyDataLoader:
         # Preprocess text
         self.df['Q5_movie_text'] = self.df[self.q5_col].apply(self.preprocess_text_for_bow)
         
-        # Apply bag-of-words using CountVectorizer
-        self.q5_vectorizer = CountVectorizer(
-            min_df=0.01,  # Minimum document frequency (at least 1% of documents)
-            max_df=0.9,   # Maximum document frequency (at most 90% of documents)
-            stop_words=list(self.stop_words)
+        # Apply bag-of-words using custom implementation
+        q5_bow_df, self.q5_vocabulary = self.bag_of_words(
+            self.df['Q5_movie_text'], 
+            min_doc_fraction=0.01, 
+            max_doc_fraction=0.9
         )
         
-        # Transform text to bag-of-words features
-        q5_bow_features = self.q5_vectorizer.fit_transform(self.df['Q5_movie_text'])
-        
-        # Convert to DataFrame and add prefix
-        q5_bow_df = pd.DataFrame(
-            q5_bow_features.toarray(),
-            columns=[f'Q5_movie_{word}' for word in self.q5_vectorizer.get_feature_names_out()]
-        )
+        # Add prefix to column names
+        q5_bow_df.columns = [f'Q5_movie_{col}' for col in q5_bow_df.columns]
         
         # Join with main DataFrame
         self.df = pd.concat([self.df, q5_bow_df], axis=1)
@@ -230,21 +392,15 @@ class FoodSurveyDataLoader:
         # Preprocess text
         self.df['Q6_drink_text'] = self.df[self.q6_col].apply(self.preprocess_text_for_bow)
         
-        # Apply bag-of-words using CountVectorizer
-        self.q6_vectorizer = CountVectorizer(
-            min_df=0.01,  # Minimum document frequency
-            max_df=0.9,   # Maximum document frequency
-            stop_words=list(self.stop_words)
+        # Apply bag-of-words using custom implementation
+        q6_bow_df, self.q6_vocabulary = self.bag_of_words(
+            self.df['Q6_drink_text'], 
+            min_doc_fraction=0.01, 
+            max_doc_fraction=0.9
         )
         
-        # Transform text to bag-of-words features
-        q6_bow_features = self.q6_vectorizer.fit_transform(self.df['Q6_drink_text'])
-        
-        # Convert to DataFrame and add prefix
-        q6_bow_df = pd.DataFrame(
-            q6_bow_features.toarray(),
-            columns=[f'Q6_drink_{word}' for word in self.q6_vectorizer.get_feature_names_out()]
-        )
+        # Add prefix to column names
+        q6_bow_df.columns = [f'Q6_drink_{col}' for col in q6_bow_df.columns]
         
         # Join with main DataFrame
         self.df = pd.concat([self.df, q6_bow_df], axis=1)
@@ -255,21 +411,15 @@ class FoodSurveyDataLoader:
         # Preprocess text
         self.df['Q7_reminds_text'] = self.df[self.q7_col].apply(self.preprocess_text_for_bow)
         
-        # Apply bag-of-words using CountVectorizer
-        self.q7_vectorizer = CountVectorizer(
-            min_df=0.01,  # Minimum document frequency
-            max_df=0.9,   # Maximum document frequency
-            stop_words=list(self.stop_words)
+        # Apply bag-of-words using custom implementation
+        q7_bow_df, self.q7_vocabulary = self.bag_of_words(
+            self.df['Q7_reminds_text'], 
+            min_doc_fraction=0.01, 
+            max_doc_fraction=0.9
         )
         
-        # Transform text to bag-of-words features
-        q7_bow_features = self.q7_vectorizer.fit_transform(self.df['Q7_reminds_text'])
-        
-        # Convert to DataFrame and add prefix
-        q7_bow_df = pd.DataFrame(
-            q7_bow_features.toarray(),
-            columns=[f'Q7_reminds_{word}' for word in self.q7_vectorizer.get_feature_names_out()]
-        )
+        # Add prefix to column names
+        q7_bow_df.columns = [f'Q7_reminds_{col}' for col in q7_bow_df.columns]
         
         # Join with main DataFrame
         self.df = pd.concat([self.df, q7_bow_df], axis=1)
@@ -277,9 +427,9 @@ class FoodSurveyDataLoader:
         # =====================
         # Process Q8: Hot sauce (categorical)
         # =====================
-        # One-hot encode hot sauce directly
-        hot_sauce_dummies = pd.get_dummies(self.df[self.q8_col], prefix='Q8_hot_sauce')
-        self.df = pd.concat([self.df, hot_sauce_dummies], axis=1)
+        # One-hot encode hot sauce directly using custom implementation
+        hot_sauce_df = self.custom_one_hot_encoding(self.df[self.q8_col], 'Q8_hot_sauce')
+        self.df = pd.concat([self.df, hot_sauce_df], axis=1)
         
         # =====================
         # Drop rows with missing numeric values
@@ -310,7 +460,7 @@ class FoodSurveyDataLoader:
         self.feature_names = [col for col in self.df.columns if col not in exclude_cols]
         
         # Encode labels
-        self.df['label_encoded'] = self.label_encoder.fit_transform(self.df['Label'])
+        self.df['label_encoded'] = self.encode_labels(self.df['Label'])
         
         print(f"Preprocessed data with {len(self.feature_names)} features")
         print(f"Started with {original_col_count} columns, ended with {len(self.df.columns)} columns")
@@ -332,10 +482,8 @@ class FoodSurveyDataLoader:
         Returns:
         --------
         tuple
-            (X_train, X_test, y_train, y_test, feature_names, label_encoder)
+            (X_train, X_test, y_train, y_test, feature_names)
         """
-        from sklearn.model_selection import train_test_split
-        
         if self.feature_names is None or len(self.feature_names) == 0:
             self.preprocess_data()
         
@@ -343,15 +491,15 @@ class FoodSurveyDataLoader:
         X = self.df[self.feature_names]
         y = self.df['label_encoded']
         
-        # Split the data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=y
+        # Split the data using our custom stratified split
+        X_train, X_test, y_train, y_test = self.stratified_train_test_split(
+            X, y, test_size=test_size, random_state=random_state
         )
         
         print(f"Split data into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples")
         print(f"Feature matrix shape: {X.shape}")
         
-        return X_train, X_test, y_train, y_test, self.feature_names, self.label_encoder
+        return X_train, X_test, y_train, y_test, self.feature_names, self
     
     def get_feature_groups(self):
         """
