@@ -243,11 +243,27 @@ def print_results(results):
         for label, stats in data.items():
             print(f"\n{label}:")
             if question == 'Q4_price':
-                for stat_name, value in stats.items():
-                    if isinstance(value, (int, float)):
-                        print(f"  {stat_name}: {value:.2f}")
+                # Handle the case where stats is a list of prices
+                if isinstance(stats, list):
+                    if stats:  # Check if the list is not empty
+                        # Calculate and print statistics
+                        mean_val = np.mean(stats)
+                        median_val = np.median(stats)
+                        min_val = min(stats)
+                        max_val = max(stats)
+                        print(f"  Mean: {mean_val:.2f}")
+                        print(f"  Median: {median_val:.2f}")
+                        print(f"  Min: {min_val:.2f}")
+                        print(f"  Max: {max_val:.2f}")
+                        print(f"  Count: {len(stats)}")
                     else:
-                        print(f"  {stat_name}: {value}")
+                        print("  No data available")
+                elif isinstance(stats, dict):  # In case the structure changed
+                    for stat_name, value in stats.items():
+                        if isinstance(value, (int, float)):
+                            print(f"  {stat_name}: {value:.2f}")
+                        else:
+                            print(f"  {stat_name}: {value}")
             else:
                 if isinstance(stats, dict):
                     for item, count in list(stats.items())[:5]:  # Top 5 items
@@ -421,10 +437,10 @@ def main():
     csv_path = 'cleaned_data_combined_modified.csv'
     
     results, df = analyze_food_survey(csv_path)
-    # print_results(results)
+    print_results(results)
     
-    for i in range(1, 9):
-        plot_word_histograms(results, i, "word_histograms", num_words=20)
+    # for i in range(1, 9):
+    #     plot_word_histograms(results, i, "word_histograms", num_words=20)
     # return results, df
 
 if __name__ == "__main__":
