@@ -79,23 +79,18 @@ def preprocess_data(df, feature_lists):
                 lambda x: 1 if isinstance(x, str) and setting in x else 0
             )
 
-    # Process movie data
     if 'movie' in df.columns:
-        # Clean movie text data
         df['movie_cleaned'] = df['movie'].fillna('').str.lower()
         
-        # Get word frequencies
         movie_words = df['movie_cleaned'].str.split(expand=True).stack()
         top_movie_words = movie_words.value_counts().head(20).index
 
-        # Create binary features for top words
         for word in top_movie_words:
             col_name = f'movie_word_{word}'
             processed_df[col_name] = df['movie_cleaned'].apply(
                 lambda x: 1 if word in x else 0
             )
 
-    # Drink categorization
     if 'drink' in df.columns:
         processed_df['drink_category'] = 'other'
 
@@ -116,17 +111,14 @@ def preprocess_data(df, feature_lists):
             elif any(term in drink_lower for term in ['juice', 'lemonade']):
                 processed_df.at[idx, 'drink_category'] = 'juice'
 
-    # Remove features with only one unique value
     for col in list(processed_df.columns):
         if processed_df[col].nunique() <= 1:
             processed_df.drop(columns=[col], inplace=True)
 
-    # Ensure columns match training data
     cols_to_keep = list(set(feature_lists['numerical_cols'] + 
                              feature_lists['categorical_cols'] + 
                              feature_lists['binary_cols']))
     
-    # Select and order columns as in training
     processed_df = processed_df[cols_to_keep]
 
     return processed_df
@@ -142,7 +134,6 @@ def predict_food_type(input_csv_path, model_dir='logistic_regression_model'):
     Returns:
     - numpy.ndarray: Predicted food types
     """
-    # Load saved artifacts
     with open(os.path.join(model_dir, 'preprocessor.pkl'), 'rb') as f:
         preprocessor = pickle.load(f)
     
@@ -152,13 +143,10 @@ def predict_food_type(input_csv_path, model_dir='logistic_regression_model'):
     with open(os.path.join(model_dir, 'feature_lists.pkl'), 'rb') as f:
         feature_lists = pickle.load(f)
 
-    # Load input data
     input_df = pd.read_csv(input_csv_path)
 
-    # Preprocess input data
     processed_input = preprocess_data(input_df, feature_lists)
 
-    # Predict using preprocessor and classifier
     X_transformed = preprocessor.transform(processed_input)
     predictions = classifier.predict(X_transformed)
 
@@ -175,7 +163,6 @@ def evaluate_model_accuracy(input_csv_path, model_dir='logistic_regression_model
     Returns:
     - float: Accuracy of the model
     """
-    # Load saved artifacts
     with open(os.path.join(model_dir, 'preprocessor.pkl'), 'rb') as f:
         preprocessor = pickle.load(f)
     
@@ -185,21 +172,16 @@ def evaluate_model_accuracy(input_csv_path, model_dir='logistic_regression_model
     with open(os.path.join(model_dir, 'feature_lists.pkl'), 'rb') as f:
         feature_lists = pickle.load(f)
 
-    # Load input data
     input_df = pd.read_csv(input_csv_path)
 
-    # Preprocess input data
     processed_input = preprocess_data(input_df, feature_lists)
 
-    # Split features and true labels
     X = processed_input
     y_true = input_df['Label'] if 'Label' in input_df.columns else input_df['food_type']
 
-    # Predict using preprocessor and classifier
     X_transformed = preprocessor.transform(X)
     y_pred = classifier.predict(X_transformed)
 
-    # Calculate accuracy
     accuracy = np.mean(y_pred == y_true)
     
     print(f"Model Accuracy: {accuracy * 100:.2f}%")
@@ -209,7 +191,7 @@ def main():
     """
     Example usage of prediction function.
     """
-    # Example usage
+
     input_file = 'cleaned_data_combined_modified.csv'
     try:
         predictions = predict_food_type(input_file)

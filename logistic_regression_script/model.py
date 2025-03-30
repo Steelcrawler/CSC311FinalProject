@@ -1,13 +1,15 @@
 import pandas as pd
 import numpy as np
 import pickle
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import re
 import os
 
@@ -26,10 +28,8 @@ def preprocess_data_for_logistic_regression(file_path):
     Preprocess food survey data for logistic regression.
     Returns processed dataframe and feature lists.
     """
-    # Load data
     df = pd.read_csv(file_path)
 
-    # Rename columns to simpler names
     columns_mapping = {
         'Q1: From a scale 1 to 5, how complex is it to make this food? (Where 1 is the most simple, and 5 is the most complex)': 'complexity',
         'Q2: How many ingredients would you expect this food item to contain?': 'ingredients',
@@ -48,19 +48,15 @@ def preprocess_data_for_logistic_regression(file_path):
 
     processed_df = pd.DataFrame(index=df.index)
 
-    # Complexity
     if 'complexity' in df.columns:
         processed_df['complexity'] = df['complexity'].copy()
 
-    # Ingredients
     if 'ingredients' in df.columns:
         processed_df['ingredients_num'] = df['ingredients'].apply(extract_number)
 
-    # Price
     if 'price' in df.columns:
         processed_df['price_num'] = df['price'].apply(extract_number)
 
-    # Hot Sauce Level
     if 'hot_sauce' in df.columns:
         hot_sauce_map = {
             'None': 0,
@@ -71,7 +67,6 @@ def preprocess_data_for_logistic_regression(file_path):
         }
         processed_df['hot_sauce_level'] = df['hot_sauce'].map(hot_sauce_map).fillna(-1)
 
-    # Process settings (multiple choice) - create individual binary features for each setting
     if 'settings' in df.columns:
         common_settings = [
             'Week day lunch', 'Week day dinner', 'Weekend lunch',
@@ -84,23 +79,18 @@ def preprocess_data_for_logistic_regression(file_path):
                 lambda x: 1 if isinstance(x, str) and setting in x else 0
             )
 
-    # Process movie data - simple word frequency approach
     if 'movie' in df.columns:
-        # Clean movie text data
         df['movie_cleaned'] = df['movie'].fillna('').str.lower()
         
-        # Get word frequencies
         movie_words = df['movie_cleaned'].str.split(expand=True).stack()
         top_movie_words = movie_words.value_counts().head(20).index
 
-        # Create binary features for top words
         for word in top_movie_words:
             col_name = f'movie_word_{word}'
             processed_df[col_name] = df['movie_cleaned'].apply(
                 lambda x: 1 if word in x else 0
             )
 
-    # Drink categorization
     if 'drink' in df.columns:
         processed_df['drink_category'] = 'other'
 
@@ -121,25 +111,20 @@ def preprocess_data_for_logistic_regression(file_path):
             elif any(term in drink_lower for term in ['juice', 'lemonade']):
                 processed_df.at[idx, 'drink_category'] = 'juice'
 
-    # Add food type
     if 'food_type' in df.columns:
         processed_df['food_type'] = df['food_type']
 
-    # Remove features with only one unique value
     for col in list(processed_df.columns):
         if processed_df[col].nunique() <= 1:
             print(f"Removing column {col} because it has only one unique value")
             processed_df.drop(columns=[col], inplace=True)
 
-    # Separate features and target
     X = processed_df.drop(columns=['food_type'])
     y = processed_df['food_type']
 
-    # Identify feature types
     numerical_cols = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
     categorical_cols = X.select_dtypes(include=['object']).columns.tolist()
     
-    # Improved binary column selection
     binary_cols = []
     for col in X.columns:
         unique_values = X[col].unique()
@@ -148,19 +133,25 @@ def preprocess_data_for_logistic_regression(file_path):
 
     return X, y, numerical_cols, categorical_cols, binary_cols
 
-def train_and_save_model(file_path, output_dir='logistic_regression_model'):
+def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
     """
-    Train logistic regression model and save model artifacts using pickle.
+    Train logistic regression model with grid search for hyperparameter tuning.
+    Create simple visualizations of validation accuracy vs hyperparameters.
     """
-    # Preprocess data
     X, y, numerical_cols, categorical_cols, binary_cols = preprocess_data_for_logistic_regression(file_path)
 
-    # Split the data
-    X_train, X_test, y_train, y_test = train_test_split(
+    X_train, X_temp, y_train, y_temp = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
     )
+    
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_temp, y_temp, test_size=0.4, random_state=42, stratify=y_temp
+    )
+    
+    print(f"Train set: {X_train.shape[0]} samples")
+    print(f"Validation set: {X_val.shape[0]} samples")
+    print(f"Test set: {X_test.shape[0]} samples")
 
-    # Create preprocessor
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', Pipeline([
@@ -173,31 +164,108 @@ def train_and_save_model(file_path, output_dir='logistic_regression_model'):
             ]), categorical_cols)
         ])
 
-    # Create full pipeline
-    pipeline = Pipeline([
-        ('preprocessor', preprocessor),
-        ('classifier', LogisticRegression(max_iter=1000, random_state=42))
-    ])
-
-    # Fit the model
-    pipeline.fit(X_train, y_train)
-
-    # Evaluate the model
-    y_pred = pipeline.predict(X_test)
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred))
-
-    # Create output directory if it doesn't exist
+    X_train_processed = preprocessor.fit_transform(X_train)
+    X_val_processed = preprocessor.transform(X_val)
+    
+    # Simplified parameter grid - removed penalty and solver
+    param_grid = {
+        'C': [0.001, 0.01, 0.1, 1, 10, 100],
+        'max_iter': range(40),
+    }
+    
+    results = {
+        'C': [],
+        'max_iter': [],
+        'train_accuracy': [],
+        'val_accuracy': [],
+        'test_accuracy': []
+    }
+    
+    print(f"Testing {len(param_grid['C']) * len(param_grid['max_iter'])} parameter combinations")
+    
+    best_score = 0
+    best_params = None
+    best_model = None
+    
     os.makedirs(output_dir, exist_ok=True)
-
-    # Save model components using pickle
+    
+    for C in param_grid['C']:
+        for max_iter in param_grid['max_iter']:
+            try:
+                model = LogisticRegression(
+                    C=C,
+                    max_iter=max_iter,
+                    random_state=42
+                )
+                model.fit(X_train_processed, y_train)
+                
+                y_train_pred = model.predict(X_train_processed)
+                train_accuracy = accuracy_score(y_train, y_train_pred)
+                
+                y_val_pred = model.predict(X_val_processed)
+                val_accuracy = accuracy_score(y_val, y_val_pred)
+                
+                X_test_processed = preprocessor.transform(X_test)
+                y_test_pred = model.predict(X_test_processed)
+                test_accuracy = accuracy_score(y_test, y_test_pred)
+                
+                results['C'].append(C)
+                results['max_iter'].append(max_iter)
+                results['train_accuracy'].append(train_accuracy)
+                results['val_accuracy'].append(val_accuracy)
+                results['test_accuracy'].append(test_accuracy)
+                
+                print(f"Params: C={C}, max_iter={max_iter}, Train acc: {train_accuracy:.4f}, Val acc: {val_accuracy:.4f}, Test acc: {test_accuracy:.4f}")
+                
+                if val_accuracy > best_score:
+                    best_score = val_accuracy
+                    best_params = {'C': C, 'max_iter': max_iter}
+                    best_model = model
+                    
+            except Exception as e:
+                print(f"Error with params C={C}, max_iter={max_iter}: {e}")
+    
+    results_df = pd.DataFrame(results)
+    
+    create_hyperparameter_plots(results_df, output_dir)
+    
+    best_pipeline = Pipeline([
+        ('preprocessor', preprocessor),
+        ('classifier', LogisticRegression(
+            C=best_params['C'],
+            max_iter=best_params['max_iter'],
+            random_state=42
+        ))
+    ])
+    
+    best_pipeline.fit(X_train, y_train)
+    
+    y_test_pred = best_pipeline.predict(X_test)
+    
+    print("\nBest Model Parameters (selected based on validation accuracy):")
+    print(f"C: {best_params['C']}")
+    print(f"max_iter: {best_params['max_iter']}")
+    
+    print("\nTest Classification Report for Best Model:")
+    print(classification_report(y_test, y_test_pred))
+    
+    cm = confusion_matrix(y_test, y_test_pred)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=np.unique(y), 
+                yticklabels=np.unique(y))
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix (Test Set)')
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/confusion_matrix_test.png")
+    
     with open(f"{output_dir}/preprocessor.pkl", 'wb') as f:
-        pickle.dump(pipeline.named_steps['preprocessor'], f)
+        pickle.dump(best_pipeline.named_steps['preprocessor'], f)
     
     with open(f"{output_dir}/classifier.pkl", 'wb') as f:
-        pickle.dump(pipeline.named_steps['classifier'], f)
-
-    # Save feature lists using pickle
+        pickle.dump(best_pipeline.named_steps['classifier'], f)
+    
     feature_dict = {
         'numerical_cols': numerical_cols,
         'categorical_cols': categorical_cols,
@@ -206,16 +274,107 @@ def train_and_save_model(file_path, output_dir='logistic_regression_model'):
     
     with open(f"{output_dir}/feature_lists.pkl", 'wb') as f:
         pickle.dump(feature_dict, f)
-
+    
+    results_df.to_csv(f"{output_dir}/grid_search_results.csv", index=False)
+    
     print(f"\nModel components saved in {output_dir}")
     print("Files saved:")
     print("- preprocessor.pkl")
     print("- classifier.pkl")
     print("- feature_lists.pkl")
+    print("- grid_search_results.csv")
+    print("- Simple 2D plots in the output directory")
+    
+    return best_pipeline, results_df
+
+def create_hyperparameter_plots(results_df, output_dir):
+    """
+    Create simple 2D plots to visualize the effect of hyperparameters on validation accuracy.
+    """
+    # Plot 1: C vs. Validation Accuracy
+    plt.figure(figsize=(10, 6))
+    
+    # Group by C and calculate mean validation accuracy
+    c_vs_val = results_df.groupby('C')['val_accuracy'].mean().reset_index()
+    
+    plt.plot(c_vs_val['C'], c_vs_val['val_accuracy'], marker='o', linestyle='-')
+    
+    plt.xscale('log')
+    plt.xlabel('C (Regularization Strength)')
+    plt.ylabel('Validation Accuracy')
+    plt.title('Effect of C (Regularization Strength) on Validation Accuracy')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/c_vs_validation_accuracy.png")
+    
+    # Plot 2: max_iter vs. Validation Accuracy
+    plt.figure(figsize=(10, 6))
+    
+    # Group by max_iter and calculate mean validation accuracy
+    iter_vs_val = results_df.groupby('max_iter')['val_accuracy'].mean().reset_index()
+    
+    plt.plot(iter_vs_val['max_iter'], iter_vs_val['val_accuracy'], marker='o', linestyle='-')
+    
+    plt.xlabel('Maximum Iterations')
+    plt.ylabel('Validation Accuracy')
+    plt.title('Effect of Maximum Iterations on Validation Accuracy')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/max_iter_vs_validation_accuracy.png")
+    
+    # Plot 3: C vs. Validation Accuracy for different max_iter values
+    plt.figure(figsize=(12, 8))
+    
+    for max_iter in sorted(results_df['max_iter'].unique()):
+        subset = results_df[results_df['max_iter'] == max_iter]
+        if not subset.empty:
+            # Group by C for each max_iter
+            c_vs_val_subset = subset.groupby('C')['val_accuracy'].mean().reset_index()
+            plt.plot(c_vs_val_subset['C'], c_vs_val_subset['val_accuracy'], marker='o', linestyle='-', 
+                    label=f'max_iter={max_iter}')
+    
+    plt.xscale('log')
+    plt.xlabel('C (Regularization Strength)')
+    plt.ylabel('Validation Accuracy')
+    plt.title('Effect of C on Validation Accuracy for Different max_iter Values')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/c_vs_validation_accuracy_by_max_iter.png")
+    
+    # Plot 4: Heatmap of C vs max_iter on validation accuracy
+    pivot_table = results_df.pivot_table(
+        values='val_accuracy', 
+        index='max_iter', 
+        columns='C', 
+        aggfunc='mean'
+    )
+    
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(pivot_table, annot=True, cmap='viridis', fmt='.3f')
+    plt.title('Validation Accuracy by C and max_iter')
+    plt.ylabel('max_iter')
+    plt.xlabel('C')
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/c_max_iter_validation_heatmap.png")
+    
+    # Plot 5: Validation vs Train accuracy
+    plt.figure(figsize=(10, 6))
+    plt.scatter(results_df['train_accuracy'], results_df['val_accuracy'], 
+                alpha=0.7, s=50, c=np.log10(results_df['C']), cmap='viridis')
+    
+    plt.plot([0.5, 1], [0.5, 1], 'k--', alpha=0.5)  # Diagonal line
+    plt.colorbar(label='log10(C)')
+    plt.xlabel('Training Accuracy')
+    plt.ylabel('Validation Accuracy')
+    plt.title('Training vs Validation Accuracy')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/train_vs_validation_accuracy.png")
 
 def main():
     file_path = 'cleaned_data_combined_modified.csv'
-    train_and_save_model(file_path)
+    train_with_grid_search(file_path)
 
 if __name__ == "__main__":
     main()
