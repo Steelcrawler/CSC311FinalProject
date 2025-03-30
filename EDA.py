@@ -87,38 +87,50 @@ def extract_common_words(text):
     
     return Counter(filtered_words)
 
-def parse_hot_sauce_amount(text, count_nan_as_none=True):
+# New function to parse checkbox responses
+def parse_checkbox_responses(text):
     if pd.isna(text) or not isinstance(text, str):
-        return 'none' if count_nan_as_none else None
+        return []
     
-    # Define stop words to ignore when matching
-    stop_words = {
-        'the', 'a', 'an', 'in', 'of', 'to', 'and', 'is', 'it', 'this', 'that', 'would', 'with', 
-        'for', 'on', 'at', 'be', 'i', 'food', 'item', 'my', 'me', 'you', 'your', 'they', 'their', 'or'
-    }
+    # Split by common checkbox separators (commas, semicolons, or pipe characters)
+    options = re.split(r'[,;|]', text)
+    
+    # Clean up each option (remove leading/trailing whitespace)
+    options = [opt.strip() for opt in options if opt.strip()]
+    
+    return options
 
-    text = text.lower()
-    words = re.findall(r'\b\w+\b', text)
-    filtered_words = [word for word in words if word not in stop_words]
-    filtered_text = ' '.join(filtered_words)
-    
-    categories = {
-        'none': ['none', 'no', 'zero', 'not', "don't", 'never', 'wouldn\'t', '0', 'nothing'],
-        'little': ['little', 'bit', 'dash', 'drop', 'hint', 'splash', 'tiny', 'small', 'minimal', 'light', 'mild'],
-        'some': ['some', 'medium', 'moderate', 'regular', 'normal', 'average'],
-        'lot': ['lot', 'lots', 'much', 'plenty', 'generous', 'good amount', 'spicy', 'extra', 'very', 'maximum', 
-                'tons', 'drowning', 'all', 'heavy', 'doused', 'covered', 'drenched', 'hot']
-    }
-    
-    for category, keywords in categories.items():
-        if any(re.search(r'\b' + re.escape(keyword) + r'\b', filtered_text) for keyword in keywords):
-            return category
-
-    for category, keywords in categories.items():
-        if any(re.search(r'\b' + re.escape(keyword) + r'\b', text) for keyword in keywords):
-            return category
-            
-    return 'other'
+def parse_hot_sauce_amount(text, count_nan_as_none=True):
+        """Parse hot sauce amount from Q8"""
+        if pd.isna(text) or not isinstance(text, str):
+            return 'none' if count_nan_as_none else None
+        
+        text = text.strip().lower()
+        
+        # Direct mapping for the specific values in the dataset
+        hot_sauce_mapping = {
+            'none': 'none',
+            'a little (mild)': 'little',
+            'a lot (hot)': 'lot',
+            'a moderate amount (medium)': 'medium'
+        }
+        
+        # Look for exact matches
+        for original, category in hot_sauce_mapping.items():
+            if original.lower() == text:
+                return category
+        
+        # Fallback for partial matches
+        if 'none' in text:
+            return 'none'
+        elif 'little' in text or 'mild' in text:
+            return 'little'
+        elif 'lot' in text or 'hot' in text:
+            return 'lot'
+        elif 'moderate' in text or 'medium' in text:
+            return 'medium'
+                
+        return 'other'
 
 def analyze_food_survey(csv_path):
     df = pd.read_csv(csv_path)
@@ -143,9 +155,15 @@ def analyze_food_survey(csv_path):
     
     for col in text_columns:
         short_col = col.split(':')[0]  
-        df[f'{short_col}_unparseable'] = df[col].apply(
-            lambda x: pd.isna(x) or not isinstance(x, str) or len(extract_common_words(x)) == 0
-        )
+        if short_col == 'Q3':
+            # Use checkbox parsing for Q3
+            df[f'{short_col}_unparseable'] = df[col].apply(
+                lambda x: pd.isna(x) or not isinstance(x, str) or len(parse_checkbox_responses(x)) == 0
+            )
+        else:
+            df[f'{short_col}_unparseable'] = df[col].apply(
+                lambda x: pd.isna(x) or not isinstance(x, str) or len(extract_common_words(x)) == 0
+            )
 
     labels = df['Label'].unique()
     results = {}
@@ -170,13 +188,13 @@ def analyze_food_survey(csv_path):
     # Q2: Ingredient count - store all values
     results['Q2_ingredients'] = {label: list(df[df['Label'] == label]['Q2_ingredients'].dropna()) for label in labels}
     
-    # Q3: Setting
+    # Q3: Setting - Use checkbox approach instead of bag of words
     results['Q3_setting'] = {label: Counter() for label in labels}
     for label in labels:
         for text in df[df['Label'] == label]['Q3: In what setting would you expect this food to be served? Please check all that apply']:
-            word_counts = extract_common_words(text)
-            for word, count in word_counts.items():
-                results['Q3_setting'][label][word] += count
+            options = parse_checkbox_responses(text)
+            for option in options:
+                results['Q3_setting'][label][option] += 1
     
     # Q4: Price
     results['Q4_price'] = {label: list(df[df['Label'] == label]['Q4_price'].dropna()) for label in labels}
