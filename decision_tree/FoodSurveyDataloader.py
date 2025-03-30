@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
 
 class FoodSurveyDataLoader:
     def __init__(self, csv_path):
@@ -196,3 +197,67 @@ class FoodSurveyDataLoader:
         print(f"Preprocessed data with {len(self.feature_names)} features")
         print(f"Started with {original_col_count} columns, ended with {len(self.df.columns)} columns")
         return self.df
+    
+    def split_data(self, label_column='Label', test_size=0.2, random_state=42):
+        """
+        Split the data into training and testing sets.
+        
+        Parameters:
+        -----------
+        df : pandas.DataFrame
+            Preprocessed dataframe from FoodSurveyDataLoader
+        label_column : str
+            Name of the column containing the target labels
+        test_size : float
+            Proportion of the dataset to include in the test split
+        random_state : int
+            Random seed for reproducibility
+        
+        Returns:
+        --------
+        tuple
+            (X_train, X_test, y_train, y_test, feature_names, label_encoder)
+        """
+        # Encode the labels
+        label_encoder = LabelEncoder()
+        y = label_encoder.fit_transform(self.df[label_column])
+        
+        # Identify feature columns - explicitly exclude problematic string columns
+        exclude_cols = [
+            label_column, 'label_encoded', 
+            'Q8: How much hot sauce would you add to this food item?',  # Exclude raw hot sauce text
+            'Q3: In what setting would you expect this food to be served? Please check all that apply',  # Exclude raw settings text
+            'Q1: From a scale 1 to 5, how complex is it to make this food? (Where 1 is the most simple, and 5 is the most complex)',
+            'Q2: How many ingredients would you expect this food item to contain?',
+            'Q4: How much would you expect to pay for one serving of this food item?'
+        ]
+        
+        # Only include numeric and binary columns
+        feature_cols = []
+        for col in self.df.columns:
+            if col in exclude_cols or col.startswith('Label'):
+                continue
+                
+            # Check if column is numeric (int or float) or binary (0/1)
+            if self.df[col].dtype in [np.int64, np.float64] or (self.df[col].isin([0, 1]).all() and self.df[col].dtype != 'object'):
+                feature_cols.append(col)
+        
+        print(f"Selected {len(feature_cols)} feature columns: {feature_cols}")
+        
+        # Get features
+        X = df[feature_cols].copy()
+        
+        # Handle any remaining NaN values
+        for col in X.columns:
+            if X[col].dtype in [np.float64, np.int64]:
+                X[col] = X[col].fillna(X[col].median())
+            else:
+                X[col] = X[col].fillna(0)
+        
+        # Split the data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=random_state, stratify=y
+        )
+        
+        print(f"Split data into {X_train.shape[0]} training samples and {X_test.shape[0]} testing samples")
+        return X_train, X_test, y_train, y_test, feature_cols, label_encoder
