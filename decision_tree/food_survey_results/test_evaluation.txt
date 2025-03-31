@@ -1,0 +1,12 @@
+Test Accuracy: 0.8410
+
+Classification Report:
+              precision    recall  f1-score   support
+
+       Pizza       0.83      0.89      0.86       109
+    Shawarma       0.85      0.85      0.85       109
+       Sushi       0.84      0.78      0.81       109
+
+    accuracy                           0.84       327
+   macro avg       0.84      0.84      0.84       327
+weighted avg       0.84      0.84      0.84       327
