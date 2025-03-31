@@ -10,6 +10,12 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from very_good_dataloader import FoodSurveyDataLoader
 from model_training import grid_search_decision_tree, evaluate_model
+import random
+
+def set_all_seeds(seed=42):
+    """Set all seeds for reproducibility"""
+    np.random.seed(seed)
+    random.seed(seed)
 
 def main():
     """Main function to train and evaluate the model"""
@@ -26,6 +32,11 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
     
     args = parser.parse_args()
+    
+    # Set random seed for reproducibility
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    os.environ['PYTHONHASHSEED'] = str(args.seed)
     
     output_dir = f"{args.output}"
     os.makedirs(output_dir, exist_ok=True)
@@ -77,10 +88,17 @@ def main():
         best_model, X_test, y_test, label_encoder, output_dir=output_dir
     )
     
+    # Evaluate on training data
+    print("\n=== Evaluating model on training data ===")
+    train_accuracy, _, _ = evaluate_model(
+        best_model, X_train, y_train, label_encoder
+    )
+    
     # Print summary
     print("\n=== Training Summary ===")
     print(f"Best parameters: max_depth={best_params['max_depth']}, min_samples_split={best_params['min_samples_split']}")
     print(f"Cross-validation accuracy: {best_cv_accuracy:.4f}")
+    print(f"Training accuracy: {train_accuracy:.4f}")
     print(f"Test accuracy: {accuracy:.4f}")
     print(f"All results and visualizations saved to {output_dir}")
     
@@ -94,6 +112,7 @@ def main():
         f.write(f"Number of features: {X_train.shape[1]}\n")
         f.write(f"Best parameters: max_depth={best_params['max_depth']}, min_samples_split={best_params['min_samples_split']}\n")
         f.write(f"Cross-validation accuracy: {best_cv_accuracy:.4f}\n")
+        f.write(f"Training accuracy: {train_accuracy:.4f}\n")
         f.write(f"Test accuracy: {accuracy:.4f}\n")
 
 if __name__ == "__main__":

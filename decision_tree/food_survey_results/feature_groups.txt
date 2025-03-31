@@ -8,21 +8,21 @@ Q2_ingredients: 1 features
   ['Q2_ingredients']
 
 Q3_setting: 6 features
-  ['Q3_setting_weekend_lunch', 'Q3_setting_week_day_lunch', 'Q3_setting_at_a_party', 'Q3_setting_late_night_snack', 'Q3_setting_weekend_dinner', 'Q3_setting_week_day_dinner']
+  ['Q3_setting_week_day_lunch', 'Q3_setting_at_a_party', 'Q3_setting_weekend_lunch', 'Q3_setting_week_day_dinner', 'Q3_setting_weekend_dinner', 'Q3_setting_late_night_snack']
 
 Q4_price: 1 features
   ['Q4_price']
 
 Q5_movie: 41 features
-  First 5: ['Q5_movie_cloudy', 'Q5_movie_meatballs', 'Q5_movie_chance', 'Q5_movie_movies', 'Q5_movie_movie']
-  Last 5: ['Q5_movie_sushi', 'Q5_movie_jiro', 'Q5_movie_dreams', 'Q5_movie_name', 'Q5_movie_monsters']
+  First 5: ['Q5_movie_chance', 'Q5_movie_meatballs', 'Q5_movie_cloudy', 'Q5_movie_movies', 'Q5_movie_movie']
+  Last 5: ['Q5_movie_jiro', 'Q5_movie_sushi', 'Q5_movie_dreams', 'Q5_movie_name', 'Q5_movie_monsters']
 
 Q6_drink: 29 features
   First 5: ['Q6_drink_coke', 'Q6_drink_cola', 'Q6_drink_soda', 'Q6_drink_coca', 'Q6_drink_tea']
   Last 5: ['Q6_drink_pair', 'Q6_drink_milk', 'Q6_drink_green', 'Q6_drink_miso', 'Q6_drink_sake']
 
 Q7_reminds: 5 features
-  ['Q7_reminds_friends', 'Q7_reminds_teachers', 'Q7_reminds_strangers', 'Q7_reminds_siblings', 'Q7_reminds_parents']
+  ['Q7_reminds_friends', 'Q7_reminds_strangers', 'Q7_reminds_teachers', 'Q7_reminds_siblings', 'Q7_reminds_parents']
 
 Q8_hot_sauce: 0 features
   []

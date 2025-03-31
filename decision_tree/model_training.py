@@ -5,6 +5,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_val_predict
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import time
+import random
 import os
 
 def grid_search_decision_tree(X_train, y_train, label_encoder, 
@@ -41,6 +42,9 @@ def grid_search_decision_tree(X_train, y_train, label_encoder,
     tuple
         (best_model, best_params, best_accuracy)
     """
+    np.random.seed(random_state)
+    random.seed(random_state)
+
     # Initialize variables to track best performance
     best_accuracy = 0
     best_model = None
@@ -235,7 +239,7 @@ def grid_search_decision_tree(X_train, y_train, label_encoder,
     
     return best_model, best_params, best_accuracy
 
-def evaluate_model(model, X_test, y_test, label_encoder, output_dir=None):
+def evaluate_model(model, X_test, y_test, label_encoder, output_dir=None, random_state=42):
     """
     Evaluate a trained model on test data.
     
@@ -257,6 +261,9 @@ def evaluate_model(model, X_test, y_test, label_encoder, output_dir=None):
     tuple
         (accuracy, classification_report_text, confusion_matrix)
     """
+    np.random.seed(random_state)
+    random.seed(random_state)
+
     # Make predictions
     y_pred = model.predict(X_test)
     

@@ -526,3 +526,21 @@ class FoodSurveyDataLoader:
             print(f"{group}: {len(features)} features")
             
         return feature_groups
+    
+if __name__ == "__main__":
+    # Example usage
+    data_loader = FoodSurveyDataLoader("cleaned_data_combined_modified.csv")
+    data_loader.load_data()
+    data_loader.preprocess_data()
+    
+    # Get feature groups and print summary
+    feature_groups = data_loader.get_feature_groups()
+    
+    # Split data
+    X_train, X_test, y_train, y_test, feature_names, label_encoder = data_loader.split_data(
+        test_size=0.2, random_state=42
+    )
+
+    print(len(X_train), len(X_test), len(y_train), len(y_test))
+    print(feature_names)
+    print(label_encoder.classes_)
