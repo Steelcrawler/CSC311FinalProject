@@ -573,7 +573,7 @@ class FeatureColumnMismatchHandler:
         return X[self.expected_columns]
 
 
-MODEL_DIR = 'logistic_regression_model'
+MODEL_DIR = 'logistic_regression_cv_results'
 
 def load_model_components():
     """
@@ -652,7 +652,7 @@ def predict_all(filename):
             return []
 
 if __name__ == "__main__":
-    # filename = "cleaned_data_combined_modified.csv"  # Pizza, Shawarma, Sushi, Pizza, Shawarma, Sushi
+    # filename = "cleaned_data_combined_modified.csv"
     filename = "example_data.csv"  # Pizza, Shawarma, Sushi, Pizza, Shawarma, Sushi
     
     # Make predictions
