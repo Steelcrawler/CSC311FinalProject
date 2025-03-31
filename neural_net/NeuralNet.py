@@ -1,5 +1,8 @@
+from threading import activeCount
+
 import pandas as pd
 import numpy as np
+from keras.src.backend import random_seed_dtype
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
@@ -7,7 +10,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 
-file_path = "cleaned_data_combined_modified.csv"
+file_path = "../cleaned_data_combined_modified.csv"
 df = pd.read_csv(file_path)
 
 df = df.drop(columns=['id'])
@@ -31,14 +34,16 @@ X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])
 
 model = Sequential([
     Dense(128, activation='relu', input_shape=(X_train.shape[1],)),
-    Dropout(0.3),
-    Dense(64, activation='relu'),
-    Dropout(0.3),
-    Dense(32, activation='relu'),
+    Dense(80, activation='sigmoid'),
+    Dropout(0.4),
+    Dense(36, activation='tanh'),
+    Dense(36, activation='tanh'),
+    Dropout(0.08),
+    Dense(13, activation = "sigmoid"),
     Dense(len(label_encoder.classes_), activation='softmax')  # Multi-class classification
 ])
 
-model.compile(optimizer=Adam(learning_rate=0.001),
+model.compile(optimizer=Adam(learning_rate=0.0001),
               loss='sparse_categorical_crossentropy',
               metrics=['accuracy'])
 
