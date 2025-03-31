@@ -1,0 +1,7 @@
+id,"Q1: From a scale 1 to 5, how complex is it to make this food? (Where 1 is the most simple, and 5 is the most complex)",Q2: How many ingredients would you expect this food item to contain?,Q3: In what setting would you expect this food to be served? Please check all that apply,Q4: How much would you expect to pay for one serving of this food item?,Q5: What movie do you think of when thinking of this food item?,Q6: What drink would you pair with this food item?,"Q7: When you think about this food item, who does it remind you of?",Q8: How much hot sauce would you add to this food item?
+716549,3,6,"Week day lunch,At a party,Late night snack",5,Cloudy with a Chance of Meatballs,Coke ,Friends,A little (mild)
+619892,4,15,"Week day lunch,Weekend lunch",$12.00 ,Chef,lemonade,Friends,A lot (hot)
+626883,3,4,"Week day lunch,Weekend lunch",$15 ,Howl's Moving Castle,Water,"Friends,Strangers",None
+716550,,,"Week day lunch,At a party,Late night snack",5,Cloudy with a Chance of Meatballs,Coke ,Friends,A little (mild)
+619893,,15,,$12.00 ,Chef,lemonade,Friends,A lot (hot)
+626884,3,4,"Week day lunch,Weekend lunch",,Howl's Moving Castle,,"Friends,Strangers",None

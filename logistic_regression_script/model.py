@@ -3,12 +3,11 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import re
 import os
@@ -151,11 +150,11 @@ def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
     y = df['label_encoded']
 
     # Split into train, validation, and test sets
-    X_train, X_temp, y_train, y_temp = train_test_split(
-        X, y, test_size=0.4, random_state=42, stratify=y
+    X_train, X_temp, y_train, y_temp = dataloader.stratified_train_test_split(
+        X, y, test_size=0.4, random_state=42
     )
-    X_val, X_test, y_val, y_test = train_test_split(
-        X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
+    X_val, X_test, y_val, y_test = dataloader.stratified_train_test_split(
+        X_temp, y_temp, test_size=0.5, random_state=42
     )
 
     print(f"Train set: {X_train.shape[0]} samples")
