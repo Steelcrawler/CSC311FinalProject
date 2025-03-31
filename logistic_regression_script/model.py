@@ -274,13 +274,13 @@ def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
     print("\nTest Classification Report for Best Model:")
     print(classification_report(y_test, y_test_pred))
 
-    cm = confusion_matrix(y_test, y_test_pred)
+    cm = confusion_matrix([dataloader.index_to_class[y] for y in y_test], [dataloader.index_to_class[y] for y in y_test_pred])
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                xticklabels=np.unique(y), 
-                yticklabels=np.unique(y))
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
+                xticklabels=['Pizza', 'Sushi', 'Shawarma'], 
+                yticklabels=['Pizza', 'Sushi', 'Shawarma'])
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
     plt.title('Confusion Matrix (Test Set)')
     plt.tight_layout()
     plt.savefig(f"{output_dir}/confusion_matrix_test.png")
