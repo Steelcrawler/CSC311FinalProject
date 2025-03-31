@@ -12,6 +12,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import re
 import os
+import sys
+
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+from very_good_dataloader import FoodSurveyDataLoader
 
 def extract_number(value):
     """Extract numerical values from strings."""
@@ -138,41 +143,61 @@ def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
     Train logistic regression model with grid search for hyperparameter tuning.
     Create simple visualizations of validation accuracy vs hyperparameters.
     """
-    X, y, numerical_cols, categorical_cols, binary_cols = preprocess_data_for_logistic_regression(file_path)
+    dataloader = FoodSurveyDataLoader(file_path)
+    dataloader.load_data()
+    df = dataloader.preprocess_data()
 
+    X = df[dataloader.feature_names]
+    y = df['label_encoded']
+
+    # Split into train, validation, and test sets
     X_train, X_temp, y_train, y_temp = train_test_split(
         X, y, test_size=0.4, random_state=42, stratify=y
     )
-    
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
     )
-    
+
     print(f"Train set: {X_train.shape[0]} samples")
     print(f"Validation set: {X_val.shape[0]} samples")
     print(f"Test set: {X_test.shape[0]} samples")
 
+    # Get feature groups to determine numerical and binary columns
+    feature_groups = dataloader.get_feature_groups()
+
+    numerical_cols = (
+        feature_groups['Q2_ingredients'] +
+        feature_groups['Q4_price'] +
+        feature_groups['Q5_movie'] +
+        feature_groups['Q6_drink'] +
+        feature_groups['Q7_reminds']
+    )
+
+    binary_cols = (
+        feature_groups['Q1_complexity'] +
+        feature_groups['Q3_setting'] +
+        feature_groups['Q8_hot_sauce']
+    )
+
+    # Configure preprocessing pipeline
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', Pipeline([
                 ('imputer', SimpleImputer(strategy='median')),
                 ('scaler', StandardScaler())
             ]), numerical_cols),
-            ('cat', Pipeline([
-                ('imputer', SimpleImputer(strategy='most_frequent')),
-                ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
-            ]), categorical_cols)
+            ('binary', 'passthrough', binary_cols)
         ])
 
     X_train_processed = preprocessor.fit_transform(X_train)
     X_val_processed = preprocessor.transform(X_val)
-    
-    # Simplified parameter grid - removed penalty and solver
+
+    # Simplified parameter grid
     param_grid = {
         'C': [0.001, 0.01, 0.1, 1, 10, 100],
         'max_iter': range(40),
     }
-    
+
     results = {
         'C': [],
         'max_iter': [],
@@ -180,15 +205,15 @@ def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
         'val_accuracy': [],
         'test_accuracy': []
     }
-    
+
     print(f"Testing {len(param_grid['C']) * len(param_grid['max_iter'])} parameter combinations")
-    
+
     best_score = 0
     best_params = None
     best_model = None
-    
+
     os.makedirs(output_dir, exist_ok=True)
-    
+
     for C in param_grid['C']:
         for max_iter in param_grid['max_iter']:
             try:
@@ -224,11 +249,11 @@ def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
                     
             except Exception as e:
                 print(f"Error with params C={C}, max_iter={max_iter}: {e}")
-    
+
     results_df = pd.DataFrame(results)
-    
+
     create_hyperparameter_plots(results_df, output_dir)
-    
+
     best_pipeline = Pipeline([
         ('preprocessor', preprocessor),
         ('classifier', LogisticRegression(
@@ -237,18 +262,18 @@ def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
             random_state=42
         ))
     ])
-    
+
     best_pipeline.fit(X_train, y_train)
-    
+
     y_test_pred = best_pipeline.predict(X_test)
-    
+
     print("\nBest Model Parameters (selected based on validation accuracy):")
     print(f"C: {best_params['C']}")
     print(f"max_iter: {best_params['max_iter']}")
-    
+
     print("\nTest Classification Report for Best Model:")
     print(classification_report(y_test, y_test_pred))
-    
+
     cm = confusion_matrix(y_test, y_test_pred)
     plt.figure(figsize=(10, 8))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
@@ -259,24 +284,23 @@ def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
     plt.title('Confusion Matrix (Test Set)')
     plt.tight_layout()
     plt.savefig(f"{output_dir}/confusion_matrix_test.png")
-    
+
     with open(f"{output_dir}/preprocessor.pkl", 'wb') as f:
         pickle.dump(best_pipeline.named_steps['preprocessor'], f)
-    
+
     with open(f"{output_dir}/classifier.pkl", 'wb') as f:
         pickle.dump(best_pipeline.named_steps['classifier'], f)
-    
+
     feature_dict = {
         'numerical_cols': numerical_cols,
-        'categorical_cols': categorical_cols,
         'binary_cols': binary_cols
     }
-    
+
     with open(f"{output_dir}/feature_lists.pkl", 'wb') as f:
         pickle.dump(feature_dict, f)
-    
+
     results_df.to_csv(f"{output_dir}/grid_search_results.csv", index=False)
-    
+
     print(f"\nModel components saved in {output_dir}")
     print("Files saved:")
     print("- preprocessor.pkl")
@@ -284,86 +308,67 @@ def train_with_grid_search(file_path, output_dir='logistic_regression_model'):
     print("- feature_lists.pkl")
     print("- grid_search_results.csv")
     print("- Simple 2D plots in the output directory")
-    
+
     return best_pipeline, results_df
 
 def create_hyperparameter_plots(results_df, output_dir):
     """
     Create simple 2D plots to visualize the effect of hyperparameters on validation accuracy.
     """
-    # Plot 1: C vs. Validation Accuracy
     plt.figure(figsize=(10, 6))
-    
-    # Group by C and calculate mean validation accuracy
     c_vs_val = results_df.groupby('C')['val_accuracy'].mean().reset_index()
-    
     plt.plot(c_vs_val['C'], c_vs_val['val_accuracy'], marker='o', linestyle='-')
-    
     plt.xscale('log')
     plt.xlabel('C (Regularization Strength)')
     plt.ylabel('Validation Accuracy')
-    plt.title('Effect of C (Regularization Strength) on Validation Accuracy')
+    plt.title('Effect of C on Validation Accuracy')
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(f"{output_dir}/c_vs_validation_accuracy.png")
-    
+
     # Plot 2: max_iter vs. Validation Accuracy
     plt.figure(figsize=(10, 6))
-    
-    # Group by max_iter and calculate mean validation accuracy
     iter_vs_val = results_df.groupby('max_iter')['val_accuracy'].mean().reset_index()
-    
     plt.plot(iter_vs_val['max_iter'], iter_vs_val['val_accuracy'], marker='o', linestyle='-')
-    
     plt.xlabel('Maximum Iterations')
     plt.ylabel('Validation Accuracy')
     plt.title('Effect of Maximum Iterations on Validation Accuracy')
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(f"{output_dir}/max_iter_vs_validation_accuracy.png")
-    
+
     # Plot 3: C vs. Validation Accuracy for different max_iter values
     plt.figure(figsize=(12, 8))
-    
     for max_iter in sorted(results_df['max_iter'].unique()):
         subset = results_df[results_df['max_iter'] == max_iter]
         if not subset.empty:
-            # Group by C for each max_iter
             c_vs_val_subset = subset.groupby('C')['val_accuracy'].mean().reset_index()
             plt.plot(c_vs_val_subset['C'], c_vs_val_subset['val_accuracy'], marker='o', linestyle='-', 
                     label=f'max_iter={max_iter}')
-    
     plt.xscale('log')
     plt.xlabel('C (Regularization Strength)')
     plt.ylabel('Validation Accuracy')
-    plt.title('Effect of C on Validation Accuracy for Different max_iter Values')
+    plt.title('Effect of C on Validation Accuracy by max_iter')
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(f"{output_dir}/c_vs_validation_accuracy_by_max_iter.png")
-    
+
     # Plot 4: Heatmap of C vs max_iter on validation accuracy
-    pivot_table = results_df.pivot_table(
-        values='val_accuracy', 
-        index='max_iter', 
-        columns='C', 
-        aggfunc='mean'
-    )
-    
     plt.figure(figsize=(12, 8))
+    pivot_table = results_df.pivot_table(values='val_accuracy', index='max_iter', columns='C', aggfunc='mean')
     sns.heatmap(pivot_table, annot=True, cmap='viridis', fmt='.3f')
     plt.title('Validation Accuracy by C and max_iter')
     plt.ylabel('max_iter')
     plt.xlabel('C')
     plt.tight_layout()
     plt.savefig(f"{output_dir}/c_max_iter_validation_heatmap.png")
-    
+
     # Plot 5: Validation vs Train accuracy
     plt.figure(figsize=(10, 6))
     plt.scatter(results_df['train_accuracy'], results_df['val_accuracy'], 
                 alpha=0.7, s=50, c=np.log10(results_df['C']), cmap='viridis')
-    
-    plt.plot([0.5, 1], [0.5, 1], 'k--', alpha=0.5)  # Diagonal line
+    plt.plot([0.5, 1], [0.5, 1], 'k--', alpha=0.5)
     plt.colorbar(label='log10(C)')
     plt.xlabel('Training Accuracy')
     plt.ylabel('Validation Accuracy')
