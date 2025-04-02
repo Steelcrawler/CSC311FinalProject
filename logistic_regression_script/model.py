@@ -13,6 +13,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_val_
 import time
 import os
 import sys
+import json
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
@@ -343,6 +344,268 @@ def create_hyperparameter_plots(results_df, output_dir):
     plt.savefig(f"{output_dir}/c_max_iter_time_heatmap.png")
     plt.close()
 
+def save_model_parameters(model, output_dir):
+    """
+    Save the model parameters to JSON and numpy files instead of pickling
+    the sklearn model objects.
+    
+    Parameters:
+    -----------
+    model : sklearn Pipeline
+        The trained pipeline containing preprocessor and classifier
+    output_dir : str
+        Directory to save the model parameters
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Extract components
+    preprocessor = model.named_steps['preprocessor']
+    classifier = model.named_steps['classifier']
+    
+    # 1. Save preprocessor parameters
+    preprocessor_params = {}
+    
+    # Store column transformer information
+    transformers_info = []
+    for name, transformer, columns in preprocessor.transformers_:
+        if name == 'num':
+            # For numerical columns, extract the imputer and scaler parameters
+            imputer = transformer.named_steps['imputer']
+            scaler = transformer.named_steps['scaler']
+            
+            # Store imputer parameters
+            imputer_params = {
+                'strategy': imputer.strategy,
+                'statistics_': imputer.statistics_.tolist() if hasattr(imputer, 'statistics_') else None
+            }
+            
+            # Store scaler parameters
+            scaler_params = {}
+            if hasattr(scaler, 'mean_'):
+                scaler_params['mean_'] = scaler.mean_.tolist()
+            if hasattr(scaler, 'scale_'):
+                scaler_params['scale_'] = scaler.scale_.tolist()
+            if hasattr(scaler, 'var_'):
+                scaler_params['var_'] = scaler.var_.tolist()
+                
+            transformers_info.append({
+                'name': name,
+                'type': 'pipeline',
+                'steps': [
+                    {'name': 'imputer', 'params': imputer_params},
+                    {'name': 'scaler', 'params': scaler_params}
+                ],
+                'columns': columns
+            })
+        elif name == 'binary':
+            # For binary columns (passthrough)
+            transformers_info.append({
+                'name': name,
+                'type': 'passthrough',
+                'columns': columns
+            })
+    
+    preprocessor_params['transformers'] = transformers_info
+    
+    # Store feature names if available
+    if hasattr(preprocessor, 'feature_names_in_'):
+        preprocessor_params['feature_names_in_'] = preprocessor.feature_names_in_.tolist()
+    
+    # Save preprocessor parameters as JSON
+    with open(f"{output_dir}/preprocessor_params.json", 'w') as f:
+        json.dump(preprocessor_params, f, indent=4)
+    
+    # 2. Save the classifier parameters
+    classifier_params = {
+        'type': 'LogisticRegression',
+        'C': classifier.C,
+        'max_iter': classifier.max_iter,
+        'classes_': classifier.classes_.tolist(),
+        'n_features_in_': classifier.n_features_in_,
+        'intercept_': classifier.intercept_.tolist(),
+    }
+    
+    # Save coefficients as a numpy array for efficiency
+    np.save(f"{output_dir}/classifier_coef.npy", classifier.coef_)
+    
+    # Save other classifier parameters as JSON
+    with open(f"{output_dir}/classifier_params.json", 'w') as f:
+        json.dump(classifier_params, f, indent=4)
+    
+    # 3. Save feature lists
+    numerical_cols = []
+    binary_cols = []
+    
+    for transformer_info in transformers_info:
+        if transformer_info['name'] == 'num':
+            numerical_cols = transformer_info['columns']
+        elif transformer_info['name'] == 'binary':
+            binary_cols = transformer_info['columns']
+    
+    feature_lists = {
+        'features': numerical_cols + binary_cols,
+        'numerical_cols': numerical_cols,
+        'binary_cols': binary_cols
+    }
+    
+    # Save feature lists as JSON
+    with open(f"{output_dir}/feature_lists.json", 'w') as f:
+        json.dump(feature_lists, f, indent=4)
+    
+    print(f"Model parameters saved to {output_dir}/")
+
+def load_model_parameters(model_dir):
+    """
+    Load the model parameters from JSON and numpy files without requiring sklearn.
+    
+    Parameters:
+    -----------
+    model_dir : str
+        Directory containing the saved model parameters
+    
+    Returns:
+    --------
+    tuple
+        (preprocessor_params, classifier_params, feature_lists, expected_columns)
+    """
+    # Load preprocessor parameters
+    with open(f"{model_dir}/preprocessor_params.json", 'r') as f:
+        preprocessor_params = json.load(f)
+    
+    # Load classifier parameters
+    with open(f"{model_dir}/classifier_params.json", 'r') as f:
+        classifier_params = json.load(f)
+    
+    # Load coefficients
+    classifier_params['coef_'] = np.load(f"{model_dir}/classifier_coef.npy")
+    
+    # Load feature lists
+    with open(f"{model_dir}/feature_lists.json", 'r') as f:
+        feature_lists = json.load(f)
+    
+    # Extract expected columns
+    expected_columns = preprocessor_params.get('feature_names_in_', feature_lists.get('features', []))
+    
+    return preprocessor_params, classifier_params, feature_lists, expected_columns
+
+def predict_without_sklearn(X, preprocessor_params, classifier_params):
+    """
+    Make predictions using the saved model parameters without requiring sklearn.
+    
+    Parameters:
+    -----------
+    X : pandas.DataFrame
+        The input features
+    preprocessor_params : dict
+        The preprocessor parameters loaded from JSON
+    classifier_params : dict
+        The classifier parameters loaded from JSON
+    
+    Returns:
+    --------
+    numpy.ndarray
+        The predicted classes
+    """
+    # Apply preprocessing
+    X_transformed = preprocess_without_sklearn(X, preprocessor_params)
+    
+    # Apply logistic regression
+    # For binary classification: P(y=1) = 1 / (1 + exp(-w·x - b))
+    # For multiclass: use softmax over all class scores
+    
+    # Get coefficients and intercept
+    coef = classifier_params['coef_']
+    intercept = np.array(classifier_params['intercept_'])
+    
+    # Calculate raw scores
+    scores = np.dot(X_transformed, coef.T) + intercept
+    
+    # For binary classification
+    if len(classifier_params['classes_']) == 2:
+        # Apply sigmoid function
+        probas = 1 / (1 + np.exp(-scores))
+        # Threshold at 0.5
+        predicted_class_indices = (probas > 0.5).astype(int)
+    else:
+        # For multiclass, apply softmax
+        # First, ensure numerical stability by subtracting the max
+        exp_scores = np.exp(scores - np.max(scores, axis=1, keepdims=True))
+        probas = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+        # Get the class with highest probability
+        predicted_class_indices = np.argmax(probas, axis=1)
+    
+    # Convert indices to actual classes
+    predicted_classes = np.array(classifier_params['classes_'])[predicted_class_indices]
+    
+    return predicted_classes
+
+def preprocess_without_sklearn(X, preprocessor_params):
+    """
+    Apply preprocessing transformations without requiring sklearn.
+    
+    Parameters:
+    -----------
+    X : pandas.DataFrame
+        The input features
+    preprocessor_params : dict
+        The preprocessor parameters loaded from JSON
+    
+    Returns:
+    --------
+    numpy.ndarray
+        The preprocessed features
+    """
+    # Initialize list to store transformed columns
+    transformed_data = []
+    
+    # Process each transformer
+    for transformer_info in preprocessor_params['transformers']:
+        # Get columns for this transformer
+        columns = transformer_info['columns']
+        
+        # Select relevant columns from input data
+        X_subset = X[columns].copy()
+        
+        if transformer_info['name'] == 'num':
+            # Apply numerical transformations (imputer and scaler)
+            for step in transformer_info['steps']:
+                if step['name'] == 'imputer':
+                    # Apply imputation
+                    statistics = np.array(step['params']['statistics_'])
+                    for i, col in enumerate(columns):
+                        # Replace NaN values with the corresponding statistic
+                        mask = X_subset[col].isna()
+                        X_subset.loc[mask, col] = statistics[i]
+                
+                elif step['name'] == 'scaler':
+                    # Apply scaling
+                    mean = np.array(step['params']['mean_'])
+                    scale = np.array(step['params']['scale_'])
+                    
+                    # Convert to numpy for vectorized operations
+                    X_subset_values = X_subset.values
+                    
+                    # Apply scaling: X_scaled = (X - mean) / scale
+                    X_subset_scaled = (X_subset_values - mean) / scale
+                    
+                    # Convert back to DataFrame
+                    X_subset = pd.DataFrame(X_subset_scaled, index=X_subset.index, columns=X_subset.columns)
+            
+            # Add transformed numerical data
+            transformed_data.append(X_subset.values)
+            
+        elif transformer_info['name'] == 'binary':
+            # For binary features, just pass through
+            transformed_data.append(X_subset.values)
+    
+    # Concatenate all transformed data
+    if len(transformed_data) > 1:
+        return np.hstack(transformed_data)
+    elif len(transformed_data) == 1:
+        return transformed_data[0]
+    else:
+        return np.array([])
+
 def main():
     """
     Main function to run the grid search for logistic regression.
@@ -430,43 +693,12 @@ def main():
     plt.savefig(f"{output_dir}/test_confusion_matrix.png")
     plt.close()
     
-    # Save the model components separately as required by load_model_components()
-    
-    # 1. Extract and save preprocessor
-    preprocessor = best_model.named_steps['preprocessor']
-    with open(f"{output_dir}/preprocessor.pkl", 'wb') as f:
-        pickle.dump(preprocessor, f)
-    
-    # 2. Extract and save classifier
-    classifier = best_model.named_steps['classifier']
-    with open(f"{output_dir}/classifier.pkl", 'wb') as f:
-        pickle.dump(classifier, f)
-    
-    # 3. Create and save feature lists dictionary
-    numerical_cols = X_train.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    
-    # Identify binary columns (0/1 values only)
-    binary_cols = []
-    for col in X_train.columns:
-        unique_values = X_train[col].unique()
-        if len(unique_values) <= 2 and set(unique_values).issubset({0, 1, True, False, np.nan}):
-            binary_cols.append(col)
-    
-    # Remove binary columns from numerical columns if they appear in both
-    numerical_cols = [col for col in numerical_cols if col not in binary_cols]
-    
-    feature_lists = {
-        'features': list(X_train.columns),
-        'numerical_cols': numerical_cols,
-        'binary_cols': binary_cols
-    }
-    
-    with open(f"{output_dir}/feature_lists.pkl", 'wb') as f:
-        pickle.dump(feature_lists, f)
-    
-    # Also save the full model as before for backwards compatibility
+    save_model_parameters(best_model, output_dir)
     with open(f"{output_dir}/best_model.pkl", 'wb') as f:
         pickle.dump(best_model, f)
+    
+    print(f"Model parameters saved to {output_dir}/")
+    print(f"Full model also saved to {output_dir}/best_model.pkl for backward compatibility")
     
     print(f"Model saved to {output_dir}/best_model.pkl")
     print(f"Model components saved to:")

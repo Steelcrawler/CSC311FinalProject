@@ -8,7 +8,6 @@ from collections import Counter
 import random
 import json
 
-s = ""
 class FoodSurveyDataLoader:
     def __init__(self, csv_path):
         """
@@ -931,7 +930,6 @@ def predict_all(filename):
     Returns:
         A list of predictions (food type labels) for each example
     """
-    global s
     try:
         _, classifier_params, _, expected_columns = load_model_components()
         
@@ -968,8 +966,7 @@ def predict_all(filename):
         # In case of error, return a fallback prediction for each example
         try:
             test_data = pd.read_csv(filename)
-            # return ['Pizza'] * len(test_data)
-            return [s] * len(test_data)
+            return ['Pizza'] * len(test_data)
         except:
             return []
 

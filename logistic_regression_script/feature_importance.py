@@ -42,7 +42,7 @@ def test_feature_importance(filename):
         ]
         
         # Load model components
-        preprocessor, classifier, feature_lists, expected_columns = load_model_components()
+        _, classifier_params, _, expected_columns = load_model_components()
         
         # Dictionary to store accuracy results
         accuracy_results = {}
@@ -58,8 +58,7 @@ def test_feature_importance(filename):
         feature_handler = FeatureColumnMismatchHandler(expected_columns)
         X_aligned = feature_handler.transform(X)
         
-        X_processed = preprocessor.transform(X_aligned)
-        pred_encoded = classifier.predict(X_processed)
+        pred_encoded = classifier_params['predict'](X_aligned)
         
         # Map predictions back to labels
         index_to_class = dataloader.index_to_class
@@ -90,8 +89,7 @@ def test_feature_importance(filename):
             X_temp_aligned = feature_handler.transform(X_temp)
             
             # Make predictions
-            X_temp_processed = preprocessor.transform(X_temp_aligned)
-            temp_pred_encoded = classifier.predict(X_temp_processed)
+            temp_pred_encoded = classifier_params['predict'](X_temp_aligned)
             
             # Map predictions back to labels
             temp_predictions = [index_to_class.get(code, 'Unknown') for code in temp_pred_encoded]
